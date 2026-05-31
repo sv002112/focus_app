@@ -1,0 +1,15 @@
+name: focuszen
+description: FocusZen App
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.0.5
+  shared_preferences: ^2.2.2
+  percent_indicator: ^4.2.3
+
+flutter:
+  uses-material-design: true

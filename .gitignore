@@ -1,0 +1,51 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# IDE / Editor files
+.idea/
+.vscode/
+*.iml
+android/*.iml
+android/app/*.iml
+android/.idea/
+
+# Android Studio & Gradle build outputs & local properties
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+.gradle/
+.kotlin/
+
+# Keys and Keystores
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+*.keystore
+
+# Metro / Debug logs
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo

@@ -63,15 +63,15 @@ Keeps single to-dos cleanly separated from habits & recurring routines:
  - 📌 One-Time Tasks           - Masonry Card Grid           - Text, Links + Notes
  - 🔄 Routines & Habits        - Color Backgrounds           - Photos + Notes
  - Google Tasks Calendar       - Pinning & Search            - 🎙️ Voice Memos
- - Vertical Battery Meter      - Checkbox Lists              - 100% Local Storage
- - AI "Break-It-Down"          - Attachment links            - "✨ Organize with AI"
- - Calm Deadline Badges        - Quick Notes                 - Keep Raw vs Convert
+ - Vertical Battery Meter      - Tile Drag & Reorder         - 100% Local Storage
+ - AI "Break-It-Down"          - Checkbox Lists              - "✨ Organize with AI"
+ - Calm Deadline Badges        - Canvas Sketches & Audio     - Keep Raw vs Convert
 ```
 
 ---
 
 ## 🔒 100% Offline & Private
-All tasks, notes, links, uploaded photos, voice recordings, and AI organization structures are stored **locally on your device**. No data leaves your phone.
+All tasks, notes, links, uploaded photos, canvas sketches, voice recordings, and AI organization structures are stored **locally on your device**. No data leaves your phone.
 
 ---
 

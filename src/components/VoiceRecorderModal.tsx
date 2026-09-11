@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SHADOWS } from '../constants/theme';
-import { playRingtonePreview, stopRingtonePreview } from '../services/soundService';
+import { playRingtonePreview, stopRingtonePreview, pickCustomAudioFromDevice } from '../services/soundService';
 import { NoteAudioMemo } from '../types';
 
 interface VoiceRecorderModalProps {
@@ -54,9 +54,23 @@ export const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({
 
   const handleStopRecording = () => {
     setIsRecording(false);
-    // Standard audio sample URI for voice memo playback
-    const generatedUri = 'https://actions.google.com/sounds/v1/human_voices/applause.ogg';
+    // Universal MP3 audio sample URI for voice memo playback
+    const generatedUri = 'https://actions.google.com/sounds/v1/ambiences/rain_heavy.ogg';
     setRecordedUri(generatedUri);
+  };
+
+  const handlePickDeviceAudio = async () => {
+    try {
+      const customTone = await pickCustomAudioFromDevice();
+      if (customTone && customTone.uri) {
+        setRecordedUri(customTone.uri);
+        setAudioTitle(customTone.name || 'Audio Attachment');
+        setRecordingTime(15);
+        setIsRecording(false);
+      }
+    } catch (e) {
+      console.warn('Error picking device audio file:', e);
+    }
   };
 
   const handleTogglePlayback = async () => {
@@ -79,7 +93,7 @@ export const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({
 
     const memo: NoteAudioMemo = {
       id: Date.now().toString(),
-      uri: recordedUri || 'https://actions.google.com/sounds/v1/human_voices/applause.ogg',
+      uri: recordedUri || 'https://actions.google.com/sounds/v1/ambiences/rain_heavy.ogg',
       title: audioTitle.trim() || 'Voice Note',
       durationSeconds: recordingTime > 0 ? recordingTime : 15,
       createdAt: new Date().toISOString(),
@@ -106,7 +120,7 @@ export const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({
           {/* Header */}
           <View style={styles.header}>
             <Ionicons name="mic" size={24} color={COLORS.primary} />
-            <Text style={styles.title}>🎙️ Record Voice Audio Note</Text>
+            <Text style={styles.title}>🎙️ Voice Audio Note</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <Ionicons name="close" size={22} color={COLORS.textSecondary} />
             </TouchableOpacity>
@@ -115,7 +129,7 @@ export const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({
           {/* Voice Memo Title Input */}
           <TextInput
             style={styles.titleInput}
-            placeholder="Audio Note Title (e.g. Quick Idea)..."
+            placeholder="Audio Title (e.g. Meeting Memo)..."
             value={audioTitle}
             onChangeText={setAudioTitle}
           />
@@ -124,7 +138,7 @@ export const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({
           <View style={styles.recorderBox}>
             <Text style={styles.timerText}>{formatSeconds(recordingTime)}</Text>
             <Text style={styles.statusText}>
-              {isRecording ? '🔴 Recording voice...' : recordedUri ? '🟢 Voice note ready!' : 'Tap record below'}
+              {isRecording ? '🔴 Recording voice...' : recordedUri ? '🟢 Audio note ready!' : 'Record voice or attach audio file'}
             </Text>
 
             {/* Waveform Visualizer simulation */}
@@ -148,19 +162,26 @@ export const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({
           <View style={styles.controlsRow}>
             {!isRecording ? (
               <TouchableOpacity style={styles.recordBtn} onPress={handleStartRecording}>
-                <Ionicons name="radio-button-on" size={28} color="#FFF" />
+                <Ionicons name="radio-button-on" size={22} color="#FFF" />
                 <Text style={styles.recordBtnText}>{recordedUri ? 'Re-record' : 'Record'}</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity style={styles.stopBtn} onPress={handleStopRecording}>
-                <Ionicons name="square" size={24} color="#FFF" />
+                <Ionicons name="square" size={20} color="#FFF" />
                 <Text style={styles.recordBtnText}>Stop Recording</Text>
+              </TouchableOpacity>
+            )}
+
+            {!isRecording && (
+              <TouchableOpacity style={styles.deviceFileBtn} onPress={handlePickDeviceAudio}>
+                <Ionicons name="folder-open-outline" size={20} color={COLORS.textPrimary} />
+                <Text style={styles.deviceFileBtnText}>Pick File</Text>
               </TouchableOpacity>
             )}
 
             {recordedUri && !isRecording && (
               <TouchableOpacity style={styles.playBtn} onPress={handleTogglePlayback}>
-                <Ionicons name={isPlaying ? 'pause' : 'play'} size={24} color={COLORS.primary} />
+                <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color={COLORS.primary} />
                 <Text style={styles.playBtnText}>{isPlaying ? 'Pause' : 'Play Preview'}</Text>
               </TouchableOpacity>
             )}
@@ -280,6 +301,22 @@ const styles = StyleSheet.create({
   recordBtnText: {
     color: '#FFF',
     fontWeight: '800',
+    fontSize: 13,
+  },
+  deviceFileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 24,
+  },
+  deviceFileBtnText: {
+    color: COLORS.textPrimary,
+    fontWeight: '700',
     fontSize: 13,
   },
   playBtn: {

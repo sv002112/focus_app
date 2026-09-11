@@ -1,11 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Task, Note, BrainDumpItem, UserProfile } from '../types';
+import { Task, Note, BrainDumpItem, UserProfile, NoteCategory } from '../types';
+import { DEFAULT_CATEGORIES } from '../constants/theme';
 
 const STORAGE_KEYS = {
   TASKS: '@focus_keep_tasks',
   NOTES: '@focus_keep_notes',
   BRAIN_DUMP: '@focus_keep_brain_dump',
   PROFILE: '@focus_keep_profile',
+  CATEGORIES: '@focus_keep_categories',
 };
 
 // Seed Data for initial launch
@@ -54,9 +56,28 @@ const SEED_NOTES: Note[] = [
     id: '1',
     title: '💡 Project Idea: Focus Keep',
     content: 'An ADHD-friendly app focusing on visual energy meters, 1-tap brain dump, and low-friction organization.',
-    color: '#FFF8E1',
+    type: 'text',
+    color: '#FFF9C4',
+    category: 'Ideas',
     isPinned: true,
-    tags: ['Idea', 'App'],
+    imageUri: 'https://images.unsplash.com/photo-1517842645767-c639042777db?w=600&auto=format&fit=crop&q=80',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: '2',
+    title: '🛒 Weekly Grocery Checklist',
+    content: 'Stock up on healthy high-protein focus snacks for the week!',
+    type: 'checklist',
+    color: '#E8F5E9',
+    category: 'Shopping',
+    isPinned: false,
+    checklist: [
+      { id: 'c1', text: 'Greek yogurt & blueberries', completed: true },
+      { id: 'c2', text: 'Almonds & walnuts', completed: true },
+      { id: 'c3', text: 'Sparkling water (Lime)', completed: false },
+      { id: 'c4', text: 'Dark chocolate 85%', completed: false },
+    ],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -173,6 +194,36 @@ export const saveProfileStorage = async (profile: UserProfile): Promise<void> =>
   }
 };
 
+export const getCategoriesStorage = async (): Promise<NoteCategory[]> => {
+  try {
+    const json = await AsyncStorage.getItem(STORAGE_KEYS.CATEGORIES);
+    let cats: NoteCategory[] = json ? JSON.parse(json) : DEFAULT_CATEGORIES;
+    
+    // Filter out old legacy 'none' entries and ensure 'Uncategorized' is present
+    cats = cats.filter((c) => c.name.toLowerCase() !== 'none');
+    const hasUncategorized = cats.some((c) => c.name.toLowerCase() === 'uncategorized');
+    
+    if (!hasUncategorized) {
+      cats = [
+        { id: 'uncategorized', name: 'Uncategorized', color: '#F1F3F4', icon: 'folder-open-outline' },
+        ...cats,
+      ];
+      await AsyncStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(cats));
+    }
+    return cats;
+  } catch (e) {
+    return DEFAULT_CATEGORIES;
+  }
+};
+
+export const saveCategoriesStorage = async (categories: NoteCategory[]): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
+  } catch (e) {
+    console.error('Error saving categories', e);
+  }
+};
+
 export const clearAllAppStorage = async (): Promise<void> => {
   try {
     await AsyncStorage.multiRemove([
@@ -180,6 +231,7 @@ export const clearAllAppStorage = async (): Promise<void> => {
       STORAGE_KEYS.NOTES,
       STORAGE_KEYS.BRAIN_DUMP,
       STORAGE_KEYS.PROFILE,
+      STORAGE_KEYS.CATEGORIES,
     ]);
   } catch (e) {
     console.error('Error clearing storage', e);

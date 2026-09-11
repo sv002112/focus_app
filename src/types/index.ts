@@ -30,14 +30,48 @@ export interface NoteChecklistItem {
   completed: boolean;
 }
 
+export interface NoteCategory {
+  id: string;
+  name: string;
+  color: string;
+  icon: string;
+}
+
+export type NoteType = 'text' | 'checklist';
+
+export interface NoteAudioMemo {
+  id: string;
+  uri: string;
+  title: string;
+  durationSeconds: number;
+  createdAt: string;
+}
+
+export interface NoteWebLink {
+  id: string;
+  displayText: string;
+  url: string;
+}
+
 export interface Note {
   id: string;
   title: string;
   content: string;
-  color: string; // e.g. '#FFF8E1' (Yellow), '#E8F5E9' (Green), etc.
+  type: NoteType;
+  color: string; // e.g. '#FFF9C4' (Yellow), '#E8F5E9' (Green), etc.
+  category: string; // e.g. 'Personal', 'Work', 'Shopping', 'Ideas', 'Projects', 'Health', 'General'
   isPinned: boolean;
-  tags: string[];
+  isArchived?: boolean;
+  isTrashed?: boolean;
   checklist?: NoteChecklistItem[];
+  images?: string[]; // Multiple image URIs
+  drawings?: string[]; // Multiple SVG drawing URIs
+  audioMemos?: NoteAudioMemo[]; // Multiple voice memos
+  webLinks?: NoteWebLink[]; // Clickable hyperlink attachments
+  imageUri?: string; // Legacy single image URI
+  drawingUri?: string; // Legacy single drawing URI
+  audioUri?: string; // Legacy single audio URI
+  reminderDate?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -63,7 +97,8 @@ export interface AISuggestion {
   energyLevel?: EnergyLevel;
   suggestedSubTasks?: string[];
   noteColor?: string;
-  tags?: string[];
+  category?: string;
+  noteType?: NoteType;
 }
 
 export interface CustomRingtone {

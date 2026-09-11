@@ -1,3 +1,16 @@
+import { NoteCategory } from '../types';
+
+export const DEFAULT_CATEGORIES: NoteCategory[] = [
+  { id: 'uncategorized', name: 'Uncategorized', color: '#F1F3F4', icon: 'folder-open-outline' },
+  { id: 'general', name: 'General', color: '#FFFFFF', icon: 'journal-outline' },
+  { id: 'personal', name: 'Personal', color: '#FFF9C4', icon: 'person-outline' },
+  { id: 'work', name: 'Work', color: '#E1F5FE', icon: 'briefcase-outline' },
+  { id: 'shopping', name: 'Shopping', color: '#E8F5E9', icon: 'cart-outline' },
+  { id: 'ideas', name: 'Ideas', color: '#F3E5F5', icon: 'bulb-outline' },
+  { id: 'projects', name: 'Projects', color: '#FFE0B2', icon: 'rocket-outline' },
+  { id: 'health', name: 'Health', color: '#E0F2F1', icon: 'fitness-outline' },
+];
+
 export const COLORS = {
   // Brand / Material Colors
   primary: '#1A73E8',
@@ -19,6 +32,12 @@ export const COLORS = {
     { id: 'pink', name: 'Soft Pink', hex: '#FCE4EC', border: '#F06292' },
     { id: 'purple', name: 'Soft Purple', hex: '#F3E5F5', border: '#BA68C8' },
     { id: 'orange', name: 'Soft Orange', hex: '#FFE0B2', border: '#FFB74D' },
+    { id: 'coral', name: 'Soft Coral', hex: '#FFEBEE', border: '#E57373' },
+    { id: 'mint', name: 'Mint Green', hex: '#E0F7FA', border: '#4DD0E1' },
+    { id: 'lavender', name: 'Lavender', hex: '#EDE7F6', border: '#9FA8DA' },
+    { id: 'rose', name: 'Soft Rose', hex: '#F8BBD0', border: '#F48FB1' },
+    { id: 'sand', name: 'Warm Sand', hex: '#F5F5DC', border: '#D7CCC8' },
+    { id: 'grey', name: 'Sober Grey', hex: '#EAECEE', border: '#CBD5E1' },
   ],
 
   // Energy Level Colors (4-Bar Vertical Battery Meter)

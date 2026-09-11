@@ -113,11 +113,21 @@ export const organizeBrainDumpAI = (item: BrainDumpItem): AISuggestion => {
   const colors = ['#FFF9C4', '#E8F5E9', '#E1F5FE', '#FFE0B2', '#F3E5F5'];
   const randomColor = colors[Math.floor(Math.random() * colors.length)];
 
+  let category = 'Ideas';
+  if (lower.includes('buy') || lower.includes('shop') || lower.includes('store')) {
+    category = 'Shopping';
+  } else if (lower.includes('work') || lower.includes('code') || lower.includes('project')) {
+    category = 'Work';
+  } else if (lower.includes('health') || lower.includes('gym') || lower.includes('doctor')) {
+    category = 'Health';
+  }
+
   return {
     itemType: 'note',
     title: item.contextNote ? item.contextNote : (item.title || 'Brain Dump Idea'),
     description: item.content,
     noteColor: randomColor,
-    tags: item.type === 'link' ? ['resource', 'link'] : ['idea', 'brain-dump'],
+    category,
+    noteType: item.content.includes('\n') ? 'checklist' : 'text',
   };
 };

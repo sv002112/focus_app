@@ -69,9 +69,10 @@ export const BrainDumpScreen: React.FC<BrainDumpScreenProps> = ({
         id: Date.now().toString(),
         title: aiProposal.title,
         content: aiProposal.description || '',
+        type: aiProposal.noteType || 'text',
         color: aiProposal.noteColor || '#FFF9C4',
+        category: aiProposal.category || 'Ideas',
         isPinned: false,
-        tags: aiProposal.tags || ['brain-dump'],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };

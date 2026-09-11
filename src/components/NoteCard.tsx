@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Linking, PanResponder, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Note, NoteAudioMemo, NoteWebLink } from '../types';
 import { COLORS, SHADOWS, DEFAULT_CATEGORIES } from '../constants/theme';
@@ -15,6 +15,10 @@ interface NoteCardProps {
   onPermanentDeleteNote?: (id: string) => void;
   onToggleChecklistItem?: (noteId: string, itemId: string) => void;
   onOpenImageLightbox?: (uri: string, title?: string) => void;
+  onMoveNotePosition?: (noteId: string, direction: 'up' | 'down') => void;
+  isActiveTile?: boolean;
+  onActivateTile?: (id: string) => void;
+  onDeactivateTile?: () => void;
   isGridView?: boolean;
 }
 
@@ -28,9 +32,123 @@ export const NoteCard: React.FC<NoteCardProps> = ({
   onPermanentDeleteNote,
   onToggleChecklistItem,
   onOpenImageLightbox,
+  onMoveNotePosition,
+  isActiveTile = false,
+  onActivateTile,
+  onDeactivateTile,
   isGridView = false,
 }) => {
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const [isLocalDragging, setIsLocalDragging] = useState(false);
+
+  const isDragging = isLocalDragging;
+
+  const pan = React.useRef(new Animated.ValueXY()).current;
+  const scaleAnim = React.useRef(new Animated.Value(1.0)).current;
+  const accumYRef = React.useRef(0);
+  const longPressTimerRef = React.useRef<any>(null);
+  const isDraggingRef = React.useRef(false);
+  const didDragRef = React.useRef(false);
+
+  const resetTileState = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+    isDraggingRef.current = false;
+    didDragRef.current = false;
+    setIsLocalDragging(false);
+    accumYRef.current = 0;
+    if (onDeactivateTile) onDeactivateTile();
+
+    Animated.parallel([
+      Animated.spring(pan, {
+        toValue: { x: 0, y: 0 },
+        useNativeDriver: false,
+        friction: 7,
+        tension: 60,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1.0,
+        useNativeDriver: false,
+        friction: 7,
+        tension: 60,
+      }),
+    ]).start();
+  };
+
+  React.useEffect(() => {
+    Animated.spring(scaleAnim, {
+      toValue: isDragging ? 0.9 : 1.0,
+      friction: 7,
+      tension: 60,
+      useNativeDriver: false,
+    }).start();
+  }, [isDragging]);
+
+  const panResponder = React.useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4,
+
+      onPanResponderGrant: () => {
+        isDraggingRef.current = false;
+        didDragRef.current = false;
+        accumYRef.current = 0;
+        pan.setValue({ x: 0, y: 0 });
+
+        longPressTimerRef.current = setTimeout(() => {
+          isDraggingRef.current = true;
+          didDragRef.current = true;
+          setIsLocalDragging(true);
+          if (onActivateTile) onActivateTile(note.id);
+        }, 180);
+      },
+
+      onPanResponderMove: (_, gestureState) => {
+        if (!isDraggingRef.current && (Math.abs(gestureState.dx) > 8 || Math.abs(gestureState.dy) > 8)) {
+          if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+          isDraggingRef.current = true;
+          didDragRef.current = true;
+          setIsLocalDragging(true);
+          if (onActivateTile) onActivateTile(note.id);
+        }
+
+        if (isDraggingRef.current || isDragging) {
+          const currentDragY = gestureState.dy - accumYRef.current;
+          pan.setValue({ x: gestureState.dx, y: currentDragY });
+
+          const threshold = isGridView ? 45 : 35;
+
+          if (currentDragY > threshold) {
+            accumYRef.current = gestureState.dy;
+            pan.setValue({ x: gestureState.dx, y: 0 });
+            if (onMoveNotePosition) onMoveNotePosition(note.id, 'down');
+          } else if (currentDragY < -threshold) {
+            accumYRef.current = gestureState.dy;
+            pan.setValue({ x: gestureState.dx, y: 0 });
+            if (onMoveNotePosition) onMoveNotePosition(note.id, 'up');
+          }
+        }
+      },
+
+      onPanResponderRelease: (_, gestureState) => {
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+        }
+
+        // Only open edit modal if this was a quick tap (NOT a long-press or drag)
+        if (!didDragRef.current && !isDraggingRef.current && Math.abs(gestureState.dx) < 8 && Math.abs(gestureState.dy) < 8) {
+          onPressNote(note);
+        }
+
+        resetTileState();
+      },
+
+      onPanResponderTerminate: () => {
+        resetTileState();
+      },
+    })
+  ).current;
 
   // Category Icon Match
   const matchedCategory = DEFAULT_CATEGORIES.find(
@@ -68,11 +186,10 @@ export const NoteCard: React.FC<NoteCardProps> = ({
     });
   }
 
-  // Checklist items
+  // Checklist items - Only active (unchecked) items shown on preview tile
   const isChecklist = note.type === 'checklist' || (!note.type && note.checklist && note.checklist.length > 0);
   const activeChecklist = note.checklist ? note.checklist.filter((i) => !i.completed) : [];
-  const completedChecklist = note.checklist ? note.checklist.filter((i) => i.completed) : [];
-  const displayChecklist = [...activeChecklist, ...completedChecklist];
+  const displayChecklist = activeChecklist;
 
   // Play/Pause Voice Audio
   const handleTogglePlayAudio = async (audioId: string, uri: string) => {
@@ -88,15 +205,30 @@ export const NoteCard: React.FC<NoteCardProps> = ({
   };
 
   return (
-    <TouchableOpacity
+    <Animated.View
+      {...panResponder.panHandlers}
       style={[
-        styles.card,
-        isGridView && styles.gridCard,
-        { backgroundColor: note.color || COLORS.surface },
+        {
+          transform: [
+            ...pan.getTranslateTransform(),
+            { scale: scaleAnim },
+          ],
+        },
+        isDragging && styles.draggingCard,
       ]}
-      onPress={() => onPressNote(note)}
-      activeOpacity={0.85}
     >
+      <TouchableOpacity
+        style={[
+          styles.card,
+          isGridView && styles.gridCard,
+          { backgroundColor: note.color || COLORS.surface },
+        ]}
+        onPressOut={() => {
+          setIsLocalDragging(false);
+          if (onDeactivateTile) onDeactivateTile();
+        }}
+        activeOpacity={0.92}
+      >
       {/* Attached Images (Full Aspect Ratio Preserve, No Crop + Lightbox Trigger) */}
       {allImages.length > 0 && (
         <View style={styles.mediaContainer}>
@@ -177,7 +309,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
 
       {/* Body Content - Text Note Mode */}
       {!isChecklist && note.content ? (
-        <Text style={styles.contentText} numberOfLines={isGridView ? 5 : 4}>
+        <Text style={styles.contentText} numberOfLines={10}>
           {note.content}
         </Text>
       ) : null}
@@ -185,7 +317,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
       {/* Body Content - Checklist Mode */}
       {isChecklist && displayChecklist.length > 0 ? (
         <View style={styles.checklistContainer}>
-          {displayChecklist.slice(0, 4).map((item) => (
+          {displayChecklist.slice(0, 8).map((item) => (
             <View
               key={item.id}
               style={styles.checkItemRow}
@@ -206,8 +338,8 @@ export const NoteCard: React.FC<NoteCardProps> = ({
               </Text>
             </View>
           ))}
-          {displayChecklist.length > 4 && (
-            <Text style={styles.moreText}>+{displayChecklist.length - 4} more items</Text>
+          {displayChecklist.length > 8 && (
+            <Text style={styles.moreText}>+{displayChecklist.length - 8} more items</Text>
           )}
         </View>
       ) : null}
@@ -308,18 +440,30 @@ export const NoteCard: React.FC<NoteCardProps> = ({
         </View>
       </View>
     </TouchableOpacity>
+  </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.08)',
+    borderColor: 'rgba(0,0,0,0.06)',
     overflow: 'hidden',
+    minHeight: 110,
+    maxHeight: 310,
+    justifyContent: 'flex-start',
     ...SHADOWS.card,
+  },
+  draggingCard: {
+    elevation: 12,
+    zIndex: 999,
+    shadowColor: 'rgba(0,0,0,0.3)',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
   },
   gridCard: {
     marginBottom: 10,
@@ -508,5 +652,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  reorderOverlayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  reorderTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFF',
+    letterSpacing: 0.8,
+  },
+  reorderBtnGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  reorderMoveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  reorderDoneBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#34A853',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  reorderBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFF',
   },
 });

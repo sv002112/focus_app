@@ -12,6 +12,10 @@ import {
   Alert,
   Linking,
   PanResponder,
+  StatusBar,
+  Platform,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -30,6 +34,7 @@ interface NotesScreenProps {
   onAddNote: (note: Note) => void;
   onUpdateNote: (note: Note) => void;
   onDeleteNote: (id: string) => void;
+  onReorderNotes?: (reorderedNotes: Note[]) => void;
   onOpenProfile?: () => void;
   avatarEmoji?: string;
 }
@@ -45,6 +50,8 @@ interface ChecklistDragRowProps {
   onChangeText: (id: string, text: string) => void;
   onDelete: (id: string) => void;
   onMoveToPosition: (id: string, newIndex: number) => void;
+  autoFocus?: boolean;
+  onSubmitEditing?: () => void;
 }
 
 const ChecklistDragRow: React.FC<ChecklistDragRowProps> = ({
@@ -56,6 +63,8 @@ const ChecklistDragRow: React.FC<ChecklistDragRowProps> = ({
   onChangeText,
   onDelete,
   onMoveToPosition,
+  autoFocus,
+  onSubmitEditing,
 }) => {
   const panResponder = React.useRef(
     PanResponder.create({
@@ -106,6 +115,9 @@ const ChecklistDragRow: React.FC<ChecklistDragRowProps> = ({
         style={[styles.checklistItemInput, isCompleted && styles.checklistItemCompleted]}
         value={item.text}
         onChangeText={(text) => onChangeText(item.id, text)}
+        autoFocus={autoFocus}
+        returnKeyType="next"
+        onSubmitEditing={onSubmitEditing}
       />
 
       <TouchableOpacity onPress={() => onDelete(item.id)}>
@@ -120,6 +132,7 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
   onAddNote,
   onUpdateNote,
   onDeleteNote,
+  onReorderNotes,
   onOpenProfile,
   avatarEmoji = '⚡',
 }) => {
@@ -163,7 +176,8 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
   // Checklist State
   const [checklist, setChecklist] = useState<NoteChecklistItem[]>([]);
   const [newChecklistText, setNewChecklistText] = useState('');
-  const [showCompletedChecklist, setShowCompletedChecklist] = useState<boolean>(true);
+  const [showCompletedChecklist, setShowCompletedChecklist] = useState<boolean>(false);
+  const [focusedChecklistId, setFocusedChecklistId] = useState<string | null>(null);
 
   // Web Link Modal State (Display Text + URL)
   const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
@@ -189,6 +203,9 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
 
   // Playback state in editor sheet
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+
+  // Active Single Tile Dragging State
+  const [activeTileId, setActiveTileId] = useState<string | null>(null);
 
   // Main Views & Category Dropdown State
   const [isMainFilterDropdownOpen, setIsMainFilterDropdownOpen] = useState(false);
@@ -238,6 +255,8 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
     setWebLinksList([]);
     setChecklist([]);
     setNewChecklistText('');
+    setShowCompletedChecklist(false);
+    setFocusedChecklistId(null);
     setActiveModal(true);
   };
 
@@ -278,6 +297,8 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
 
     setChecklist(note.checklist ? [...note.checklist] : []);
     setNewChecklistText('');
+    setShowCompletedChecklist(false);
+    setFocusedChecklistId(null);
     setActiveModal(true);
   };
 
@@ -423,14 +444,33 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
 
   // Checklist Management
   const handleAddChecklistItem = () => {
-    if (!newChecklistText.trim()) return;
+    const newId = Date.now().toString();
     const newItem: NoteChecklistItem = {
-      id: Date.now().toString(),
+      id: newId,
       text: newChecklistText.trim(),
       completed: false,
     };
     setChecklist([...checklist, newItem]);
     setNewChecklistText('');
+    setFocusedChecklistId(newId);
+  };
+
+  const handleInsertChecklistItemAfter = (targetId: string) => {
+    const newId = Date.now().toString();
+    const newItem: NoteChecklistItem = {
+      id: newId,
+      text: '',
+      completed: false,
+    };
+    const targetIndex = checklist.findIndex((c) => c.id === targetId);
+    if (targetIndex !== -1) {
+      const updated = [...checklist];
+      updated.splice(targetIndex + 1, 0, newItem);
+      setChecklist(updated);
+    } else {
+      setChecklist([...checklist, newItem]);
+    }
+    setFocusedChecklistId(newId);
   };
 
   const handleToggleChecklistItemInEditor = (id: string) => {
@@ -464,6 +504,7 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
     const isTextEmpty = noteType === 'text' && !content.trim();
 
     if (!title.trim() && isTextEmpty && isChecklistEmpty && imagesList.length === 0 && drawingsList.length === 0 && audioMemosList.length === 0 && webLinksList.length === 0) {
+      setSelectedNote(null);
       setActiveModal(false);
       return;
     }
@@ -512,6 +553,7 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
       onAddNote(newNote);
     }
 
+    setSelectedNote(null);
     setActiveModal(false);
   };
 
@@ -553,6 +595,44 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
     );
 
     onUpdateNote({ ...target, checklist: updatedChecklist });
+  };
+
+  // Reorder note cards position via long-press drag
+  const handleMoveNoteCardPosition = (noteId: string, direction: 'up' | 'down') => {
+    const targetNoteObj = notes.find((n) => n.id === noteId);
+    if (!targetNoteObj) return;
+
+    // Filter list for current section (pinned vs unpinned)
+    const currentSectionList = filteredNotes.filter((n) => !!n.isPinned === !!targetNoteObj.isPinned);
+    const listIndex = currentSectionList.findIndex((n) => n.id === noteId);
+    if (listIndex === -1) return;
+
+    // Sequential adjacent swap (step = 1) keeps Column 1 and Column 2 balanced without vertical gaps
+    const step = 1;
+    const targetListIndex = direction === 'up' ? listIndex - step : listIndex + step;
+
+    if (targetListIndex < 0 || targetListIndex >= currentSectionList.length) return;
+
+    const targetNoteObjInList = currentSectionList[targetListIndex];
+    if (!targetNoteObjInList) return;
+
+    const currentIndex = notes.findIndex((n) => n.id === noteId);
+    const targetIndex = notes.findIndex((n) => n.id === targetNoteObjInList.id);
+
+    if (currentIndex === -1 || targetIndex === -1) return;
+
+    // Direct swap in master notes array preserves all categories and note properties intact
+    const updatedNotes = [...notes];
+    const temp = updatedNotes[currentIndex];
+    updatedNotes[currentIndex] = updatedNotes[targetIndex];
+    updatedNotes[targetIndex] = temp;
+
+    // Smooth layout animation for surrounding tiles during swap
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+
+    if (onReorderNotes) {
+      onReorderNotes(updatedNotes);
+    }
   };
 
   // Filter notes
@@ -811,10 +891,58 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
         {pinnedNotes.length > 0 && activeTab === 'notes' && (
           <View style={styles.section}>
             <Text style={styles.sectionHeader}>PINNED</Text>
-            <View style={isGridView ? styles.gridContainer : styles.listContainerStyle}>
-              {pinnedNotes.map((n) => (
-                <View key={n.id} style={isGridView ? styles.gridItemWrapper : undefined}>
+            {isGridView ? (
+              <View style={styles.masonryRow}>
+                <View style={styles.masonryColumn}>
+                  {pinnedNotes.filter((_, idx) => idx % 2 === 0).map((n) => (
+                    <NoteCard
+                      key={n.id}
+                      note={n}
+                      onPressNote={openEditModal}
+                      onTogglePin={handleTogglePinOnCard}
+                      onDeleteNote={handleSoftDeleteOnCard}
+                      onToggleArchiveNote={handleToggleArchiveOnCard}
+                      onToggleChecklistItem={handleToggleChecklistItemOnCard}
+                      onOpenImageLightbox={(uri, title) => {
+                        setLightboxImageUri(uri);
+                        setLightboxTitle(title);
+                      }}
+                      onMoveNotePosition={handleMoveNoteCardPosition}
+                      isActiveTile={activeTileId === n.id}
+                      onActivateTile={(id) => setActiveTileId(id)}
+                      onDeactivateTile={() => setActiveTileId(null)}
+                      isGridView={isGridView}
+                    />
+                  ))}
+                </View>
+                <View style={styles.masonryColumn}>
+                  {pinnedNotes.filter((_, idx) => idx % 2 === 1).map((n) => (
+                    <NoteCard
+                      key={n.id}
+                      note={n}
+                      onPressNote={openEditModal}
+                      onTogglePin={handleTogglePinOnCard}
+                      onDeleteNote={handleSoftDeleteOnCard}
+                      onToggleArchiveNote={handleToggleArchiveOnCard}
+                      onToggleChecklistItem={handleToggleChecklistItemOnCard}
+                      onOpenImageLightbox={(uri, title) => {
+                        setLightboxImageUri(uri);
+                        setLightboxTitle(title);
+                      }}
+                      onMoveNotePosition={handleMoveNoteCardPosition}
+                      isActiveTile={activeTileId === n.id}
+                      onActivateTile={(id) => setActiveTileId(id)}
+                      onDeactivateTile={() => setActiveTileId(null)}
+                      isGridView={isGridView}
+                    />
+                  ))}
+                </View>
+              </View>
+            ) : (
+              <View style={styles.listContainerStyle}>
+                {pinnedNotes.map((n) => (
                   <NoteCard
+                    key={n.id}
                     note={n}
                     onPressNote={openEditModal}
                     onTogglePin={handleTogglePinOnCard}
@@ -825,11 +953,15 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                       setLightboxImageUri(uri);
                       setLightboxTitle(title);
                     }}
+                    onMoveNotePosition={handleMoveNoteCardPosition}
+                    isActiveTile={activeTileId === n.id}
+                    onActivateTile={(id) => setActiveTileId(id)}
+                    onDeactivateTile={() => setActiveTileId(null)}
                     isGridView={isGridView}
                   />
-                </View>
-              ))}
-            </View>
+                ))}
+              </View>
+            )}
           </View>
         )}
 
@@ -839,10 +971,62 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
             <Text style={styles.sectionHeader}>OTHERS</Text>
           )}
 
-          <View style={isGridView ? styles.gridContainer : styles.listContainerStyle}>
-            {otherNotes.map((n) => (
-              <View key={n.id} style={isGridView ? styles.gridItemWrapper : undefined}>
+          {isGridView ? (
+            <View style={styles.masonryRow}>
+              <View style={styles.masonryColumn}>
+                {otherNotes.filter((_, idx) => idx % 2 === 0).map((n) => (
+                  <NoteCard
+                    key={n.id}
+                    note={n}
+                    onPressNote={openEditModal}
+                    onTogglePin={handleTogglePinOnCard}
+                    onDeleteNote={handleSoftDeleteOnCard}
+                    onToggleArchiveNote={handleToggleArchiveOnCard}
+                    onRestoreNote={handleRestoreOnCard}
+                    onPermanentDeleteNote={handlePermanentDeleteOnCard}
+                    onToggleChecklistItem={handleToggleChecklistItemOnCard}
+                    onOpenImageLightbox={(uri, title) => {
+                      setLightboxImageUri(uri);
+                      setLightboxTitle(title);
+                    }}
+                    onMoveNotePosition={handleMoveNoteCardPosition}
+                    isActiveTile={activeTileId === n.id}
+                    onActivateTile={(id) => setActiveTileId(id)}
+                    onDeactivateTile={() => setActiveTileId(null)}
+                    isGridView={isGridView}
+                  />
+                ))}
+              </View>
+              <View style={styles.masonryColumn}>
+                {otherNotes.filter((_, idx) => idx % 2 === 1).map((n) => (
+                  <NoteCard
+                    key={n.id}
+                    note={n}
+                    onPressNote={openEditModal}
+                    onTogglePin={handleTogglePinOnCard}
+                    onDeleteNote={handleSoftDeleteOnCard}
+                    onToggleArchiveNote={handleToggleArchiveOnCard}
+                    onRestoreNote={handleRestoreOnCard}
+                    onPermanentDeleteNote={handlePermanentDeleteOnCard}
+                    onToggleChecklistItem={handleToggleChecklistItemOnCard}
+                    onOpenImageLightbox={(uri, title) => {
+                      setLightboxImageUri(uri);
+                      setLightboxTitle(title);
+                    }}
+                    onMoveNotePosition={handleMoveNoteCardPosition}
+                    isActiveTile={activeTileId === n.id}
+                    onActivateTile={(id) => setActiveTileId(id)}
+                    onDeactivateTile={() => setActiveTileId(null)}
+                    isGridView={isGridView}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : (
+            <View style={styles.listContainerStyle}>
+              {otherNotes.map((n) => (
                 <NoteCard
+                  key={n.id}
                   note={n}
                   onPressNote={openEditModal}
                   onTogglePin={handleTogglePinOnCard}
@@ -855,11 +1039,15 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                     setLightboxImageUri(uri);
                     setLightboxTitle(title);
                   }}
+                  onMoveNotePosition={handleMoveNoteCardPosition}
+                  isActiveTile={activeTileId === n.id}
+                  onActivateTile={(id) => setActiveTileId(id)}
+                  onDeactivateTile={() => setActiveTileId(null)}
                   isGridView={isGridView}
                 />
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          )}
 
           {filteredNotes.length === 0 && (
             <View style={styles.emptyState}>
@@ -950,7 +1138,7 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                 {selectedNote ? 'Edit Note' : 'New Keep Note'}
               </Text>
 
-              <TouchableOpacity onPress={() => setActiveModal(false)} style={styles.closeBtn}>
+              <TouchableOpacity onPress={handleSave} style={styles.closeBtn}>
                 <Ionicons name="close" size={24} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -1121,6 +1309,8 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                       index={idx}
                       totalCount={activeChecklistItems.length}
                       isCompleted={false}
+                      autoFocus={focusedChecklistId === item.id}
+                      onSubmitEditing={() => handleInsertChecklistItemAfter(item.id)}
                       onToggle={handleToggleChecklistItemInEditor}
                       onChangeText={(id, text) => {
                         setChecklist(
@@ -1175,6 +1365,8 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                             index={cIdx}
                             totalCount={completedChecklistItems.length}
                             isCompleted={true}
+                            autoFocus={focusedChecklistId === item.id}
+                            onSubmitEditing={() => handleInsertChecklistItemAfter(item.id)}
                             onToggle={handleToggleChecklistItemInEditor}
                             onChangeText={(id, text) => {
                               setChecklist(
@@ -1265,7 +1457,12 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
 
             {/* Modal Bottom Actions Toolbar */}
             <View style={styles.modalFooterToolbar}>
-              <View style={styles.mediaActionsGroup}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.mediaActionsGroup}
+                style={{ flex: 1, marginRight: 8 }}
+              >
                 {/* 1. Pin option */}
                 <TouchableOpacity
                   style={[styles.toolBtn, isPinned && styles.toolBtnActive]}
@@ -1349,7 +1546,7 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                     <Ionicons name="trash-outline" size={19} color={COLORS.danger} />
                   </TouchableOpacity>
                 )}
-              </View>
+              </ScrollView>
 
               <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
                 <Text style={styles.saveText}>Save 💾</Text>
@@ -1482,6 +1679,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0,
   },
   header: {
     paddingHorizontal: 16,
@@ -1610,6 +1808,14 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginBottom: 8,
     letterSpacing: 1,
+  },
+  masonryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  masonryColumn: {
+    width: '48.5%',
+    flexDirection: 'column',
   },
   gridContainer: {
     flexDirection: 'row',

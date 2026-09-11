@@ -132,6 +132,11 @@ export default function App() {
     setBrainDumpItems([]);
   };
 
+  const handleReorderNotes = (reorderedNotes: Note[]) => {
+    setNotes(reorderedNotes);
+    saveNotesStorage(reorderedNotes);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -195,6 +200,7 @@ export default function App() {
                 onAddNote={handleAddNote}
                 onUpdateNote={handleUpdateNote}
                 onDeleteNote={handleDeleteNote}
+                onReorderNotes={handleReorderNotes}
                 onOpenProfile={() => setIsProfileOpen(true)}
                 avatarEmoji={profile.avatarEmoji}
               />

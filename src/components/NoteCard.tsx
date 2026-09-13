@@ -87,32 +87,21 @@ export const NoteCard: React.FC<NoteCardProps> = ({
 
   const panResponder = React.useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4,
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10,
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10,
 
       onPanResponderGrant: () => {
-        isDraggingRef.current = false;
-        didDragRef.current = false;
+        isDraggingRef.current = true;
+        didDragRef.current = true;
+        setIsLocalDragging(true);
         accumYRef.current = 0;
         pan.setValue({ x: 0, y: 0 });
-
-        longPressTimerRef.current = setTimeout(() => {
-          isDraggingRef.current = true;
-          didDragRef.current = true;
-          setIsLocalDragging(true);
-          if (onActivateTile) onActivateTile(note.id);
-        }, 180);
+        if (onActivateTile) onActivateTile(note.id);
       },
 
       onPanResponderMove: (_, gestureState) => {
-        if (!isDraggingRef.current && (Math.abs(gestureState.dx) > 8 || Math.abs(gestureState.dy) > 8)) {
-          if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
-          isDraggingRef.current = true;
-          didDragRef.current = true;
-          setIsLocalDragging(true);
-          if (onActivateTile) onActivateTile(note.id);
-        }
-
         if (isDraggingRef.current || isDragging) {
           const currentDragY = gestureState.dy - accumYRef.current;
           pan.setValue({ x: gestureState.dx, y: currentDragY });
@@ -131,16 +120,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
         }
       },
 
-      onPanResponderRelease: (_, gestureState) => {
-        if (longPressTimerRef.current) {
-          clearTimeout(longPressTimerRef.current);
-        }
-
-        // Only open edit modal if this was a quick tap (NOT a long-press or drag)
-        if (!didDragRef.current && !isDraggingRef.current && Math.abs(gestureState.dx) < 8 && Math.abs(gestureState.dy) < 8) {
-          onPressNote(note);
-        }
-
+      onPanResponderRelease: () => {
         resetTileState();
       },
 
@@ -223,13 +203,55 @@ export const NoteCard: React.FC<NoteCardProps> = ({
           isGridView && styles.gridCard,
           { backgroundColor: note.color || COLORS.surface },
         ]}
-        onPressOut={() => {
-          setIsLocalDragging(false);
-          if (onDeactivateTile) onDeactivateTile();
+        onPress={() => onPressNote(note)}
+        onLongPress={() => {
+          setIsLocalDragging(true);
+          if (onActivateTile) onActivateTile(note.id);
         }}
-        activeOpacity={0.92}
+        activeOpacity={0.88}
       >
-      {/* Attached Images (Full Aspect Ratio Preserve, No Crop + Lightbox Trigger) */}
+      {/* Header Row Title, Category & Pin / Restore Action (ALWAYS TOP) */}
+      <View style={styles.headerRow}>
+        <View style={styles.headerTitleGroup}>
+          <Text style={styles.titleText} numberOfLines={2}>
+            {note.title || 'Untitled Note'}
+          </Text>
+          <View style={styles.topCategoryBadge}>
+            <Ionicons name={categoryIcon as any} size={11} color={COLORS.textSecondary} />
+            <Text style={styles.topCategoryBadgeText}>
+              {note.category || 'General'}
+            </Text>
+          </View>
+        </View>
+        
+        {note.isTrashed ? (
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              if (onRestoreNote) onRestoreNote(note.id);
+            }}
+            style={styles.actionBtn}
+          >
+            <Ionicons name="refresh-outline" size={16} color={COLORS.primary} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              onTogglePin(note.id);
+            }}
+            style={styles.actionBtn}
+          >
+            <Ionicons
+              name={note.isPinned ? 'push' : 'push-outline'}
+              size={16}
+              color={note.isPinned ? COLORS.primary : COLORS.textSecondary}
+            />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Attached Images (Placed below Header Title) */}
       {allImages.length > 0 && (
         <View style={styles.mediaContainer}>
           {allImages.slice(0, 2).map((imgUri, idx) => (
@@ -237,14 +259,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
               key={idx}
               style={styles.imageWrapper}
               activeOpacity={0.9}
-              onPress={(e) => {
-                e.stopPropagation();
-                if (onOpenImageLightbox) {
-                  onOpenImageLightbox(imgUri, `${note.title || 'Note'} - Image ${idx + 1}`);
-                } else {
-                  onPressNote(note);
-                }
-              }}
+              onPress={() => onPressNote(note)}
             >
               <Image
                 source={{ uri: imgUri }}
@@ -259,7 +274,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
         </View>
       )}
 
-      {/* Attached Canvas Sketches (Full Aspect Ratio & Contrast + Lightbox Trigger) */}
+      {/* Attached Canvas Sketches (Placed below Header Title) */}
       {allDrawings.length > 0 && (
         <View style={styles.drawingContainer}>
           {allDrawings.slice(0, 2).map((dwgUri, idx) => (
@@ -267,14 +282,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
               key={idx}
               style={styles.drawingWrapper}
               activeOpacity={0.9}
-              onPress={(e) => {
-                e.stopPropagation();
-                if (onOpenImageLightbox) {
-                  onOpenImageLightbox(dwgUri, `${note.title || 'Note'} - Canvas Sketch`);
-                } else {
-                  onPressNote(note);
-                }
-              }}
+              onPress={() => onPressNote(note)}
             >
               <Image
                 source={{ uri: dwgUri }}
@@ -286,27 +294,6 @@ export const NoteCard: React.FC<NoteCardProps> = ({
         </View>
       )}
 
-      {/* Header Row Title & Pin / Restore Action */}
-      <View style={styles.headerRow}>
-        <Text style={styles.titleText} numberOfLines={2}>
-          {note.title || 'Untitled Note'}
-        </Text>
-        
-        {note.isTrashed ? (
-          <TouchableOpacity onPress={() => onRestoreNote && onRestoreNote(note.id)} style={styles.actionBtn}>
-            <Ionicons name="refresh-outline" size={16} color={COLORS.primary} />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity onPress={() => onTogglePin(note.id)} style={styles.actionBtn}>
-            <Ionicons
-              name={note.isPinned ? 'pin' : 'pin-outline'}
-              size={16}
-              color={note.isPinned ? COLORS.primary : COLORS.textSecondary}
-            />
-          </TouchableOpacity>
-        )}
-      </View>
-
       {/* Body Content - Text Note Mode */}
       {!isChecklist && note.content ? (
         <Text style={styles.contentText} numberOfLines={10}>
@@ -314,13 +301,15 @@ export const NoteCard: React.FC<NoteCardProps> = ({
         </Text>
       ) : null}
 
-      {/* Body Content - Checklist Mode */}
+      {/* Body Content - Checklist Mode (Tapping opens edit modal) */}
       {isChecklist && displayChecklist.length > 0 ? (
         <View style={styles.checklistContainer}>
           {displayChecklist.slice(0, 8).map((item) => (
-            <View
+            <TouchableOpacity
               key={item.id}
               style={styles.checkItemRow}
+              activeOpacity={0.8}
+              onPress={() => onPressNote(note)}
             >
               <Ionicons
                 name={item.completed ? 'checkbox' : 'square-outline'}
@@ -336,7 +325,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
               >
                 {item.text}
               </Text>
-            </View>
+            </TouchableOpacity>
           ))}
           {displayChecklist.length > 8 && (
             <Text style={styles.moreText}>+{displayChecklist.length - 8} more items</Text>
@@ -404,19 +393,17 @@ export const NoteCard: React.FC<NoteCardProps> = ({
         </View>
       ) : null}
 
-      {/* Footer Row - Category Badge & Actions */}
+      {/* Footer Row - Actions */}
       <View style={styles.footerRow}>
-        <View style={styles.categoryBadge}>
-          <Ionicons name={categoryIcon as any} size={13} color={COLORS.textSecondary} />
-          <Text style={styles.categoryBadgeText}>
-            {note.category || 'General'}
-          </Text>
-        </View>
+        <View style={{ flex: 1 }} />
 
         <View style={styles.footerActionsGroup}>
           {note.isTrashed ? (
             <TouchableOpacity
-              onPress={() => onPermanentDeleteNote && onPermanentDeleteNote(note.id)}
+              onPress={(e) => {
+                e.stopPropagation();
+                if (onPermanentDeleteNote) onPermanentDeleteNote(note.id);
+              }}
               style={styles.actionBtn}
             >
               <Ionicons name="trash-bin-outline" size={15} color={COLORS.danger} />
@@ -424,7 +411,13 @@ export const NoteCard: React.FC<NoteCardProps> = ({
           ) : (
             <>
               {onToggleArchiveNote && (
-                <TouchableOpacity onPress={() => onToggleArchiveNote(note.id)} style={styles.actionBtn}>
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onToggleArchiveNote(note.id);
+                  }}
+                  style={styles.actionBtn}
+                >
                   <Ionicons
                     name={note.isArchived ? 'archive' : 'archive-outline'}
                     size={15}
@@ -432,7 +425,13 @@ export const NoteCard: React.FC<NoteCardProps> = ({
                   />
                 </TouchableOpacity>
               )}
-              <TouchableOpacity onPress={() => onDeleteNote(note.id)} style={styles.actionBtn}>
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onDeleteNote(note.id);
+                }}
+                style={styles.actionBtn}
+              >
                 <Ionicons name="trash-outline" size={15} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </>
@@ -469,9 +468,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   mediaContainer: {
-    marginTop: -12,
-    marginHorizontal: -12,
-    marginBottom: 10,
+    marginVertical: 6,
+    borderRadius: 10,
     backgroundColor: '#F5F5F5',
     overflow: 'hidden',
   },
@@ -485,9 +483,8 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(0,0,0,0.06)',
   },
   drawingContainer: {
-    marginTop: -12,
-    marginHorizontal: -12,
-    marginBottom: 10,
+    marginVertical: 6,
+    borderRadius: 10,
     backgroundColor: '#FAF9F6',
     overflow: 'hidden',
   },
@@ -514,16 +511,34 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 6,
+  },
+  headerTitleGroup: {
+    flex: 1,
+    marginRight: 6,
   },
   titleText: {
     fontSize: 15,
     fontWeight: '700',
     color: COLORS.textPrimary,
-    flex: 1,
-    marginRight: 6,
+    marginBottom: 3,
+  },
+  topCategoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  topCategoryBadgeText: {
+    fontSize: 10.5,
+    color: COLORS.textSecondary,
+    fontWeight: '700',
   },
   actionBtn: {
     padding: 4,

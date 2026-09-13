@@ -16,6 +16,8 @@ export interface Task {
   repeatFrequency?: RepeatFrequency;
   repeatDays?: number[]; // 0 = Sun, 1 = Mon, ..., 6 = Sat
   dueDate?: string; // ISO string
+  reminderDate?: string; // ISO string for alarm/reminder
+  category?: string; // e.g. 'Work', 'Personal', 'General'
   energyLevel: EnergyLevel; // 1 to 4 bars
   subTasks: SubTask[];
   completed: boolean;

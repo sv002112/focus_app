@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Task, EnergyLevel } from '../types';
-import { COLORS, SHADOWS } from '../constants/theme';
+import { Task, EnergyLevel, NoteCategory } from '../types';
+import { COLORS, SHADOWS, DEFAULT_CATEGORIES } from '../constants/theme';
 import { BatteryMeter } from './BatteryMeter';
+import { CalendarDatePickerModal } from './CalendarDatePickerModal';
 
 interface TaskCardProps {
   task: Task;
+  categories?: NoteCategory[];
   onToggleComplete: (id: string) => void;
   onUpdateTask: (updatedTask: Task) => void;
   onDeleteTask: (id: string) => void;
@@ -16,6 +18,7 @@ interface TaskCardProps {
 
 export const TaskCard: React.FC<TaskCardProps> = ({
   task,
+  categories,
   onToggleComplete,
   onUpdateTask,
   onDeleteTask,
@@ -24,6 +27,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [newSubTaskTitle, setNewSubTaskTitle] = useState('');
+  const [isReminderPickerOpen, setIsReminderPickerOpen] = useState(false);
+  const [isCategoryPickerOpen, setIsCategoryPickerOpen] = useState(false);
+
+  const activeCategoriesList = categories && categories.length > 0 ? categories : DEFAULT_CATEGORIES;
+
+  // Category Icon Match
+  const matchedCategory = activeCategoriesList.find(
+    (c) => c.name.toLowerCase() === (task.category || 'General').toLowerCase()
+  );
+  const categoryIcon = matchedCategory ? matchedCategory.icon : 'folder-outline';
 
   const handleEnergyChange = (newLevel: EnergyLevel) => {
     onUpdateTask({ ...task, energyLevel: newLevel });
@@ -93,18 +106,62 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               </View>
             )}
 
+            {/* Category Badge - Clickable to select category */}
+            <TouchableOpacity
+              style={styles.categoryBadge}
+              onPress={(e) => {
+                e.stopPropagation();
+                setIsCategoryPickerOpen(!isCategoryPickerOpen);
+              }}
+            >
+              <Ionicons name={categoryIcon as any} size={11} color={COLORS.textSecondary} />
+              <Text style={styles.categoryBadgeText}>
+                {task.category || 'General'}
+              </Text>
+              <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+
+            {/* Alarm Reminder Badge */}
+            {task.reminderDate ? (
+              <TouchableOpacity
+                style={styles.reminderBadge}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setIsReminderPickerOpen(true);
+                }}
+              >
+                <Ionicons name="alarm" size={11} color={COLORS.dueBadgeText} />
+                <Text style={styles.reminderText} numberOfLines={1}>
+                  {new Date(task.reminderDate).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </Text>
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onUpdateTask({ ...task, reminderDate: undefined });
+                  }}
+                  style={{ marginLeft: 2 }}
+                >
+                  <Ionicons name="close-circle" size={12} color={COLORS.dueBadgeText} />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            ) : null}
+
             {/* Vertical Battery Energy Level */}
             <BatteryMeter level={task.energyLevel} onChangeLevel={handleEnergyChange} size="small" />
           </View>
         </TouchableOpacity>
 
-        {/* Focus Timer Button */}
-        {onStartFocusTimer && !task.completed && (
+        {/* Set Alarm Reminder Button directly on Tile (Pulled from Notes) */}
+        {!task.completed && (
           <TouchableOpacity
-            onPress={() => onStartFocusTimer(task)}
-            style={styles.timerBtn}
+            onPress={() => setIsReminderPickerOpen(true)}
+            style={[styles.timerBtn, task.reminderDate && styles.reminderBtnActive]}
           >
-            <Ionicons name="time-outline" size={18} color="#0288D1" />
+            <Ionicons
+              name={task.reminderDate ? 'alarm' : 'alarm-outline'}
+              size={18}
+              color={task.reminderDate ? COLORS.dueBadgeText : COLORS.primary}
+            />
           </TouchableOpacity>
         )}
 
@@ -119,6 +176,38 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           <Ionicons name="sparkles-outline" size={18} color={COLORS.primary} />
         </TouchableOpacity>
       </View>
+
+      {/* Category Selection Dropdown Overlay */}
+      {isCategoryPickerOpen && (
+        <View style={styles.catDropdownMenuOverlay}>
+          <View style={styles.catDropdownHeaderRow}>
+            <Text style={styles.catDropdownHeaderTitle}>SELECT CATEGORY</Text>
+            <TouchableOpacity onPress={() => setIsCategoryPickerOpen(false)}>
+              <Ionicons name="close" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          {activeCategoriesList.map((cat) => {
+            const isSelected = (task.category || 'General').toLowerCase() === cat.name.toLowerCase();
+            return (
+              <TouchableOpacity
+                key={cat.id}
+                style={[styles.catMenuItem, isSelected && styles.activeCatMenuItem]}
+                onPress={() => {
+                  onUpdateTask({ ...task, category: cat.name });
+                  setIsCategoryPickerOpen(false);
+                }}
+              >
+                <Ionicons name={(cat.icon as any) || 'folder-outline'} size={15} color={COLORS.textPrimary} />
+                <Text style={[styles.catMenuText, isSelected && styles.activeCatMenuText]}>
+                  {cat.name}
+                </Text>
+                <View style={[styles.catColorDot, { backgroundColor: cat.color || '#FFE0B2' }]} />
+                {isSelected && <Ionicons name="checkmark" size={16} color={COLORS.primary} />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
 
       {/* Expanded Sub-Tasks Section */}
       {expanded && (
@@ -177,6 +266,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </View>
         </View>
       )}
+
+      {/* Alarm Reminder Date Picker Modal */}
+      <CalendarDatePickerModal
+        visible={isReminderPickerOpen}
+        onClose={() => setIsReminderPickerOpen(false)}
+        onSaveReminder={(isoString) => {
+          onUpdateTask({ ...task, reminderDate: isoString });
+        }}
+        initialDate={task.reminderDate}
+      />
     </View>
   );
 };
@@ -260,11 +359,42 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.dueBadgeText,
   },
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    gap: 3,
+  },
+  categoryBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  reminderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.dueBadgeBg,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    gap: 3,
+  },
+  reminderText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.dueBadgeText,
+  },
   timerBtn: {
     padding: 6,
     borderRadius: 10,
     backgroundColor: '#E1F5FE',
     marginRight: 4,
+  },
+  reminderBtnActive: {
+    backgroundColor: COLORS.dueBadgeBg,
   },
   magicBtn: {
     padding: 6,
@@ -353,5 +483,56 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  catDropdownMenuOverlay: {
+    marginTop: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.card,
+  },
+  catDropdownHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  catDropdownHeaderTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.textSecondary,
+    letterSpacing: 0.8,
+  },
+  catMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    gap: 8,
+    marginBottom: 2,
+  },
+  activeCatMenuItem: {
+    backgroundColor: COLORS.primaryLight,
+  },
+  catMenuText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    flex: 1,
+  },
+  activeCatMenuText: {
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  catColorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
 });

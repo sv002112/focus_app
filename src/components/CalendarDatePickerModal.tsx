@@ -15,6 +15,7 @@ interface CalendarDatePickerModalProps {
   onClose: () => void;
   onSaveReminder: (isoDateString: string) => void;
   initialDate?: string;
+  mode?: 'alarmReminder' | 'dateOnly';
 }
 
 const MONTH_NAMES = [
@@ -29,6 +30,7 @@ export const CalendarDatePickerModal: React.FC<CalendarDatePickerModalProps> = (
   onClose,
   onSaveReminder,
   initialDate,
+  mode = 'alarmReminder',
 }) => {
   // Calendar date state (defaults to today or initialDate)
   const init = initialDate ? new Date(initialDate) : new Date();
@@ -78,21 +80,23 @@ export const CalendarDatePickerModal: React.FC<CalendarDatePickerModalProps> = (
 
   const handleSave = () => {
     let hour24 = selectedHour;
-    if (selectedAmPm === 'PM' && hour24 < 12) hour24 += 12;
-    if (selectedAmPm === 'AM' && hour24 === 12) hour24 = 0;
+    if (mode === 'alarmReminder') {
+      if (selectedAmPm === 'PM' && hour24 < 12) hour24 += 12;
+      if (selectedAmPm === 'AM' && hour24 === 12) hour24 = 0;
+    } else {
+      hour24 = 12; // Noon default for date-only filter
+    }
 
-    const finalDate = new Date(currentYear, currentMonth, selectedDay, hour24, selectedMinute, 0);
+    const finalDate = new Date(currentYear, currentMonth, selectedDay, hour24, mode === 'alarmReminder' ? selectedMinute : 0, 0);
     onSaveReminder(finalDate.toISOString());
     onClose();
   };
 
   // Build grid days cells
   const calendarCells = [];
-  // Offset blank cells
   for (let i = 0; i < firstDayOfMonth; i++) {
     calendarCells.push(<View key={`blank-${i}`} style={styles.calendarCellEmpty} />);
   }
-  // Days of current month
   for (let day = 1; day <= daysInMonth; day++) {
     const isSelected = selectedDay === day;
     const isToday =
@@ -129,14 +133,22 @@ export const CalendarDatePickerModal: React.FC<CalendarDatePickerModalProps> = (
   const dayOfWeekStr = DAYS_OF_WEEK[dateObj.getDay()];
   const monthNameStr = MONTH_NAMES[currentMonth];
 
+  const isDateOnly = mode === 'dateOnly';
+
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.modalOverlay}>
         <View style={styles.modalCard}>
           {/* Header */}
           <View style={styles.headerRow}>
-            <Ionicons name="calendar-outline" size={22} color={COLORS.primary} />
-            <Text style={styles.headerTitle}>Set Alarm & Reminder ⏰</Text>
+            <Ionicons
+              name={isDateOnly ? 'calendar-outline' : 'alarm-outline'}
+              size={22}
+              color={COLORS.primary}
+            />
+            <Text style={styles.headerTitle}>
+              {isDateOnly ? 'Select Date 📅' : 'Set Alarm & Reminder ⏰'}
+            </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <Ionicons name="close" size={22} color={COLORS.textSecondary} />
             </TouchableOpacity>
@@ -170,131 +182,137 @@ export const CalendarDatePickerModal: React.FC<CalendarDatePickerModalProps> = (
           <View style={styles.calendarGrid}>{calendarCells}</View>
 
           {/* Dropdown Selectors for Hour, Minute, AM/PM */}
-          <Text style={styles.sectionLabel}>SELECT TIME:</Text>
-          <View style={styles.timeDropdownsRow}>
-            {/* Hour Dropdown */}
-            <View style={styles.dropdownContainer}>
-              <Text style={styles.dropdownLabel}>Hour</Text>
-              <TouchableOpacity
-                style={styles.dropdownHeader}
-                onPress={() => {
-                  setIsHourDropdownOpen(!isHourDropdownOpen);
-                  setIsMinuteDropdownOpen(false);
-                  setIsAmPmDropdownOpen(false);
-                }}
-              >
-                <Text style={styles.dropdownHeaderText}>{selectedHour}</Text>
-                <Ionicons
-                  name={isHourDropdownOpen ? 'chevron-up' : 'chevron-down'}
-                  size={16}
-                  color={COLORS.textSecondary}
-                />
-              </TouchableOpacity>
+          {!isDateOnly && (
+            <>
+              <Text style={styles.sectionLabel}>SELECT TIME:</Text>
+              <View style={styles.timeDropdownsRow}>
+                {/* Hour Dropdown */}
+                <View style={styles.dropdownContainer}>
+                  <Text style={styles.dropdownLabel}>Hour</Text>
+                  <TouchableOpacity
+                    style={styles.dropdownHeader}
+                    onPress={() => {
+                      setIsHourDropdownOpen(!isHourDropdownOpen);
+                      setIsMinuteDropdownOpen(false);
+                      setIsAmPmDropdownOpen(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownHeaderText}>{selectedHour}</Text>
+                    <Ionicons
+                      name={isHourDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={COLORS.textSecondary}
+                    />
+                  </TouchableOpacity>
 
-              {isHourDropdownOpen && (
-                <ScrollView style={styles.dropdownMenuList} nestedScrollEnabled>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((h) => (
-                    <TouchableOpacity
-                      key={h}
-                      style={[styles.dropdownMenuItem, selectedHour === h && styles.dropdownMenuItemActive]}
-                      onPress={() => {
-                        setSelectedHour(h);
-                        setIsHourDropdownOpen(false);
-                      }}
-                    >
-                      <Text style={[styles.dropdownMenuText, selectedHour === h && styles.dropdownMenuTextActive]}>
-                        {h}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
-            </View>
-
-            {/* Minute Dropdown */}
-            <View style={styles.dropdownContainer}>
-              <Text style={styles.dropdownLabel}>Minute</Text>
-              <TouchableOpacity
-                style={styles.dropdownHeader}
-                onPress={() => {
-                  setIsMinuteDropdownOpen(!isMinuteDropdownOpen);
-                  setIsHourDropdownOpen(false);
-                  setIsAmPmDropdownOpen(false);
-                }}
-              >
-                <Text style={styles.dropdownHeaderText}>{formattedMinuteStr}</Text>
-                <Ionicons
-                  name={isMinuteDropdownOpen ? 'chevron-up' : 'chevron-down'}
-                  size={16}
-                  color={COLORS.textSecondary}
-                />
-              </TouchableOpacity>
-
-              {isMinuteDropdownOpen && (
-                <ScrollView style={styles.dropdownMenuList} nestedScrollEnabled>
-                  {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((m) => (
-                    <TouchableOpacity
-                      key={m}
-                      style={[styles.dropdownMenuItem, selectedMinute === m && styles.dropdownMenuItemActive]}
-                      onPress={() => {
-                        setSelectedMinute(m);
-                        setIsMinuteDropdownOpen(false);
-                      }}
-                    >
-                      <Text style={[styles.dropdownMenuText, selectedMinute === m && styles.dropdownMenuTextActive]}>
-                        {m.toString().padStart(2, '0')}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
-            </View>
-
-            {/* AM / PM Dropdown */}
-            <View style={styles.dropdownContainer}>
-              <Text style={styles.dropdownLabel}>Period</Text>
-              <TouchableOpacity
-                style={styles.dropdownHeader}
-                onPress={() => {
-                  setIsAmPmDropdownOpen(!isAmPmDropdownOpen);
-                  setIsHourDropdownOpen(false);
-                  setIsMinuteDropdownOpen(false);
-                }}
-              >
-                <Text style={styles.dropdownHeaderText}>{selectedAmPm}</Text>
-                <Ionicons
-                  name={isAmPmDropdownOpen ? 'chevron-up' : 'chevron-down'}
-                  size={16}
-                  color={COLORS.textSecondary}
-                />
-              </TouchableOpacity>
-
-              {isAmPmDropdownOpen && (
-                <View style={styles.dropdownMenuList}>
-                  {(['AM', 'PM'] as const).map((period) => (
-                    <TouchableOpacity
-                      key={period}
-                      style={[styles.dropdownMenuItem, selectedAmPm === period && styles.dropdownMenuItemActive]}
-                      onPress={() => {
-                        setSelectedAmPm(period);
-                        setIsAmPmDropdownOpen(false);
-                      }}
-                    >
-                      <Text style={[styles.dropdownMenuText, selectedAmPm === period && styles.dropdownMenuTextActive]}>
-                        {period}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                  {isHourDropdownOpen && (
+                    <ScrollView style={styles.dropdownMenuList} nestedScrollEnabled>
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((h) => (
+                        <TouchableOpacity
+                          key={h}
+                          style={[styles.dropdownMenuItem, selectedHour === h && styles.dropdownMenuItemActive]}
+                          onPress={() => {
+                            setSelectedHour(h);
+                            setIsHourDropdownOpen(false);
+                          }}
+                        >
+                          <Text style={[styles.dropdownMenuText, selectedHour === h && styles.dropdownMenuTextActive]}>
+                            {h}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  )}
                 </View>
-              )}
-            </View>
-          </View>
+
+                {/* Minute Dropdown */}
+                <View style={styles.dropdownContainer}>
+                  <Text style={styles.dropdownLabel}>Minute</Text>
+                  <TouchableOpacity
+                    style={styles.dropdownHeader}
+                    onPress={() => {
+                      setIsMinuteDropdownOpen(!isMinuteDropdownOpen);
+                      setIsHourDropdownOpen(false);
+                      setIsAmPmDropdownOpen(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownHeaderText}>{formattedMinuteStr}</Text>
+                    <Ionicons
+                      name={isMinuteDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={COLORS.textSecondary}
+                    />
+                  </TouchableOpacity>
+
+                  {isMinuteDropdownOpen && (
+                    <ScrollView style={styles.dropdownMenuList} nestedScrollEnabled>
+                      {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((m) => (
+                        <TouchableOpacity
+                          key={m}
+                          style={[styles.dropdownMenuItem, selectedMinute === m && styles.dropdownMenuItemActive]}
+                          onPress={() => {
+                            setSelectedMinute(m);
+                            setIsMinuteDropdownOpen(false);
+                          }}
+                        >
+                          <Text style={[styles.dropdownMenuText, selectedMinute === m && styles.dropdownMenuTextActive]}>
+                            {m.toString().padStart(2, '0')}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  )}
+                </View>
+
+                {/* AM / PM Dropdown */}
+                <View style={styles.dropdownContainer}>
+                  <Text style={styles.dropdownLabel}>Period</Text>
+                  <TouchableOpacity
+                    style={styles.dropdownHeader}
+                    onPress={() => {
+                      setIsAmPmDropdownOpen(!isAmPmDropdownOpen);
+                      setIsHourDropdownOpen(false);
+                      setIsMinuteDropdownOpen(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownHeaderText}>{selectedAmPm}</Text>
+                    <Ionicons
+                      name={isAmPmDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={COLORS.textSecondary}
+                    />
+                  </TouchableOpacity>
+
+                  {isAmPmDropdownOpen && (
+                    <View style={styles.dropdownMenuList}>
+                      {(['AM', 'PM'] as const).map((period) => (
+                        <TouchableOpacity
+                          key={period}
+                          style={[styles.dropdownMenuItem, selectedAmPm === period && styles.dropdownMenuItemActive]}
+                          onPress={() => {
+                            setSelectedAmPm(period);
+                            setIsAmPmDropdownOpen(false);
+                          }}
+                        >
+                          <Text style={[styles.dropdownMenuText, selectedAmPm === period && styles.dropdownMenuTextActive]}>
+                            {period}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </View>
+            </>
+          )}
 
           {/* Selected DateTime Summary Preview */}
           <View style={styles.summaryBox}>
-            <Ionicons name="alarm" size={18} color={COLORS.primary} />
+            <Ionicons name={isDateOnly ? 'calendar-outline' : 'alarm'} size={18} color={COLORS.primary} />
             <Text style={styles.summaryText}>
-              {dayOfWeekStr}, {monthNameStr} {selectedDay}, {currentYear} at {selectedHour}:{formattedMinuteStr} {selectedAmPm}
+              {isDateOnly
+                ? `${dayOfWeekStr}, ${monthNameStr} ${selectedDay}, ${currentYear}`
+                : `${dayOfWeekStr}, ${monthNameStr} ${selectedDay}, ${currentYear} at ${selectedHour}:${formattedMinuteStr} ${selectedAmPm}`}
             </Text>
           </View>
 
@@ -305,7 +323,7 @@ export const CalendarDatePickerModal: React.FC<CalendarDatePickerModalProps> = (
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-              <Text style={styles.saveText}>Set Alarm</Text>
+              <Text style={styles.saveText}>{isDateOnly ? 'Select Date' : 'Set Alarm'}</Text>
             </TouchableOpacity>
           </View>
         </View>

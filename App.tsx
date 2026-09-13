@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
@@ -150,91 +150,95 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style={profile.darkMode ? 'light' : 'dark'} />
-      <NavigationContainer>
-        <Tab.Navigator
-          screenOptions={({ route }) => ({
-            headerShown: false,
-            tabBarActiveTintColor: COLORS.primary,
-            tabBarInactiveTintColor: COLORS.textSecondary,
-            tabBarStyle: {
-              backgroundColor: COLORS.surface,
-              borderTopColor: COLORS.border,
-              height: 60,
-              paddingBottom: 8,
-              paddingTop: 6,
-            },
-            tabBarLabelStyle: {
-              fontSize: 11,
-              fontWeight: '600',
-            },
-            tabBarIcon: ({ color, size }) => {
-              let iconName: keyof typeof Ionicons.glyphMap = 'checkmark-circle-outline';
-              if (route.name === 'Tasks') {
-                iconName = 'checkbox-outline';
-              } else if (route.name === 'Notes') {
-                iconName = 'journal-outline';
-              } else if (route.name === 'Brain Dump') {
-                iconName = 'bulb-outline';
-              }
-              return <Ionicons name={iconName} size={size} color={color} />;
-            },
-          })}
-        >
-          <Tab.Screen name="Tasks">
-            {() => (
-              <FocusTasksScreen
-                tasks={tasks}
-                onAddTask={handleAddTask}
-                onUpdateTask={handleUpdateTask}
-                onDeleteTask={handleDeleteTask}
-                onOpenProfile={() => setIsProfileOpen(true)}
-                avatarEmoji={profile.avatarEmoji}
-              />
-            )}
-          </Tab.Screen>
+      <View style={styles.webOuterContainer}>
+        <View style={styles.webAppFrame}>
+          <NavigationContainer>
+            <Tab.Navigator
+              screenOptions={({ route }) => ({
+                headerShown: false,
+                tabBarActiveTintColor: COLORS.primary,
+                tabBarInactiveTintColor: COLORS.textSecondary,
+                tabBarStyle: {
+                  backgroundColor: COLORS.surface,
+                  borderTopColor: COLORS.border,
+                  height: Platform.OS === 'web' ? 64 : 60,
+                  paddingBottom: Platform.OS === 'web' ? 10 : 8,
+                  paddingTop: 6,
+                },
+                tabBarLabelStyle: {
+                  fontSize: 11,
+                  fontWeight: '600',
+                },
+                tabBarIcon: ({ color, size }) => {
+                  let iconName: keyof typeof Ionicons.glyphMap = 'checkmark-circle-outline';
+                  if (route.name === 'Tasks') {
+                    iconName = 'checkbox-outline';
+                  } else if (route.name === 'Notes') {
+                    iconName = 'journal-outline';
+                  } else if (route.name === 'Brain Dump') {
+                    iconName = 'bulb-outline';
+                  }
+                  return <Ionicons name={iconName} size={size} color={color} />;
+                },
+              })}
+            >
+              <Tab.Screen name="Tasks">
+                {() => (
+                  <FocusTasksScreen
+                    tasks={tasks}
+                    onAddTask={handleAddTask}
+                    onUpdateTask={handleUpdateTask}
+                    onDeleteTask={handleDeleteTask}
+                    onOpenProfile={() => setIsProfileOpen(true)}
+                    avatarEmoji={profile.avatarEmoji}
+                  />
+                )}
+              </Tab.Screen>
 
-          <Tab.Screen name="Notes">
-            {() => (
-              <NotesScreen
-                notes={notes}
-                onAddNote={handleAddNote}
-                onUpdateNote={handleUpdateNote}
-                onDeleteNote={handleDeleteNote}
-                onReorderNotes={handleReorderNotes}
-                onOpenProfile={() => setIsProfileOpen(true)}
-                avatarEmoji={profile.avatarEmoji}
-              />
-            )}
-          </Tab.Screen>
+              <Tab.Screen name="Notes">
+                {() => (
+                  <NotesScreen
+                    notes={notes}
+                    onAddNote={handleAddNote}
+                    onUpdateNote={handleUpdateNote}
+                    onDeleteNote={handleDeleteNote}
+                    onReorderNotes={handleReorderNotes}
+                    onOpenProfile={() => setIsProfileOpen(true)}
+                    avatarEmoji={profile.avatarEmoji}
+                  />
+                )}
+              </Tab.Screen>
 
-          <Tab.Screen name="Brain Dump">
-            {() => (
-              <BrainDumpScreen
-                items={brainDumpItems}
-                onAddDumpItem={handleAddBrainDumpItem}
-                onDeleteDumpItem={handleDeleteBrainDumpItem}
-                onConvertToTask={handleAddTask}
-                onConvertToNote={handleAddNote}
-                onOpenProfile={() => setIsProfileOpen(true)}
-                avatarEmoji={profile.avatarEmoji}
-              />
-            )}
-          </Tab.Screen>
-        </Tab.Navigator>
+              <Tab.Screen name="Brain Dump">
+                {() => (
+                  <BrainDumpScreen
+                    items={brainDumpItems}
+                    onAddDumpItem={handleAddBrainDumpItem}
+                    onDeleteDumpItem={handleDeleteBrainDumpItem}
+                    onConvertToTask={handleAddTask}
+                    onConvertToNote={handleAddNote}
+                    onOpenProfile={() => setIsProfileOpen(true)}
+                    avatarEmoji={profile.avatarEmoji}
+                  />
+                )}
+              </Tab.Screen>
+            </Tab.Navigator>
 
-        {/* Global Profile & Settings Modal */}
-        <ProfileModal
-          visible={isProfileOpen}
-          onClose={() => setIsProfileOpen(false)}
-          tasksCount={tasks.length}
-          completedTasksCount={completedTasksCount}
-          notesCount={notes.length}
-          brainDumpCount={brainDumpItems.length}
-          profile={profile}
-          onUpdateProfile={handleUpdateProfile}
-          onClearAllData={handleClearAllData}
-        />
-      </NavigationContainer>
+            {/* Global Profile & Settings Modal */}
+            <ProfileModal
+              visible={isProfileOpen}
+              onClose={() => setIsProfileOpen(false)}
+              tasksCount={tasks.length}
+              completedTasksCount={completedTasksCount}
+              notesCount={notes.length}
+              brainDumpCount={brainDumpItems.length}
+              profile={profile}
+              onUpdateProfile={handleUpdateProfile}
+              onClearAllData={handleClearAllData}
+            />
+          </NavigationContainer>
+        </View>
+      </View>
     </SafeAreaProvider>
   );
 }
@@ -245,5 +249,22 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  webOuterContainer: {
+    flex: 1,
+    backgroundColor: Platform.OS === 'web' ? '#EAEFF5' : COLORS.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  webAppFrame: {
+    flex: 1,
+    width: '100%',
+    maxWidth: Platform.OS === 'web' ? 520 : '100%',
+    backgroundColor: COLORS.background,
+    position: 'relative',
+    shadowColor: 'rgba(0,0,0,0.12)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
   },
 });

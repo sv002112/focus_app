@@ -683,7 +683,10 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                 <Text style={{ fontSize: 18 }}>{avatarEmoji}</Text>
               </TouchableOpacity>
             )}
-            <Text style={styles.appTitle}>My Notes 📌</Text>
+            <View style={styles.titleContainer}>
+              <Ionicons name="journal" size={20} color={COLORS.primary} />
+              <Text style={styles.appTitle}>My Notes</Text>
+            </View>
           </View>
 
           {/* Grid vs List View Switcher */}
@@ -729,19 +732,19 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                     ? 'archive-outline'
                     : activeTab === 'trash'
                     ? 'trash-outline'
-                    : 'journal-outline'
+                    : 'document-text-outline'
                 }
                 size={16}
                 color={COLORS.primary}
               />
               <Text style={styles.filterDropdownTriggerText} numberOfLines={1}>
                 {activeTab === 'archive'
-                  ? '📦 Archive Notes'
+                  ? 'Archive Notes'
                   : activeTab === 'trash'
-                  ? '🗑️ Trash Notes'
+                  ? 'Trash Notes'
                   : selectedCategoryFilter === 'All'
-                  ? '📝 Notes — All Categories'
-                  : `📝 Notes — ${selectedCategoryFilter}`}
+                  ? 'Notes — All Categories'
+                  : `Notes — ${selectedCategoryFilter}`}
               </Text>
             </View>
             <Ionicons
@@ -1145,6 +1148,15 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
 
             {/* Scrollable Main Content */}
             <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+              {/* Note Title Input (ALWAYS TOP) */}
+              <TextInput
+                style={styles.titleInput}
+                placeholder="Title"
+                value={title}
+                onChangeText={setTitle}
+                placeholderTextColor="rgba(0,0,0,0.4)"
+              />
+
               {/* Attached Images List (Preserves Aspect Ratio, No Crop + Lightbox Trigger) */}
               {imagesList.length > 0 && (
                 <View style={styles.mediaGridSection}>
@@ -1272,15 +1284,6 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                   </TouchableOpacity>
                 </View>
               ) : null}
-
-              {/* Note Title Input */}
-              <TextInput
-                style={styles.titleInput}
-                placeholder="Title"
-                value={title}
-                onChangeText={setTitle}
-                placeholderTextColor="rgba(0,0,0,0.4)"
-              />
 
               {/* Text Note Mode - Body Content Input */}
               {noteType === 'text' && (
@@ -1469,7 +1472,7 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                   onPress={() => setIsPinned(!isPinned)}
                 >
                   <Ionicons
-                    name={isPinned ? 'pin' : 'pin-outline'}
+                    name={isPinned ? 'push' : 'push-outline'}
                     size={19}
                     color={isPinned ? COLORS.primary : COLORS.textPrimary}
                   />
@@ -1549,7 +1552,8 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
               </ScrollView>
 
               <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                <Text style={styles.saveText}>Save 💾</Text>
+                <Ionicons name="checkmark-done" size={16} color="#FFF" style={{ marginRight: 4 }} />
+                <Text style={styles.saveText}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1679,7 +1683,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0,
+    paddingTop: Platform.OS === 'web' ? 12 : Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0,
   },
   header: {
     paddingHorizontal: 16,
@@ -1697,6 +1701,11 @@ const styles = StyleSheet.create({
   headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   profileHeaderBtn: {
     width: 32,
@@ -2261,6 +2270,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 18,
     paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   saveText: {
     color: '#FFF',

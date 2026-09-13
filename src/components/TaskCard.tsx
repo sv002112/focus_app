@@ -12,6 +12,9 @@ interface TaskCardProps {
   onToggleComplete: (id: string) => void;
   onUpdateTask: (updatedTask: Task) => void;
   onDeleteTask: (id: string) => void;
+  onToggleArchiveTask?: (id: string) => void;
+  onRestoreTask?: (id: string) => void;
+  onPermanentDeleteTask?: (id: string) => void;
   onAIBreakdown: (id: string) => void;
   onStartFocusTimer?: (task: Task) => void;
 }
@@ -22,6 +25,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onToggleComplete,
   onUpdateTask,
   onDeleteTask,
+  onToggleArchiveTask,
+  onRestoreTask,
+  onPermanentDeleteTask,
   onAIBreakdown,
   onStartFocusTimer,
 }) => {
@@ -151,8 +157,18 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </View>
         </TouchableOpacity>
 
+        {/* Restore Quick Action for Trashed Task */}
+        {task.isTrashed && onRestoreTask ? (
+          <TouchableOpacity
+            onPress={() => onRestoreTask(task.id)}
+            style={styles.restoreHeaderBtn}
+          >
+            <Ionicons name="refresh-outline" size={18} color={COLORS.primary} />
+          </TouchableOpacity>
+        ) : null}
+
         {/* Set Alarm Reminder Button directly on Tile (Pulled from Notes) */}
-        {!task.completed && (
+        {!task.completed && !task.isTrashed && (
           <TouchableOpacity
             onPress={() => setIsReminderPickerOpen(true)}
             style={[styles.timerBtn, task.reminderDate && styles.reminderBtnActive]}
@@ -166,15 +182,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         )}
 
         {/* AI Magic Breakdown Button */}
-        <TouchableOpacity
-          onPress={() => {
-            onAIBreakdown(task.id);
-            setExpanded(true);
-          }}
-          style={styles.magicBtn}
-        >
-          <Ionicons name="sparkles-outline" size={18} color={COLORS.primary} />
-        </TouchableOpacity>
+        {!task.isTrashed && (
+          <TouchableOpacity
+            onPress={() => {
+              onAIBreakdown(task.id);
+              setExpanded(true);
+            }}
+            style={styles.magicBtn}
+          >
+            <Ionicons name="sparkles-outline" size={18} color={COLORS.primary} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Category Selection Dropdown Overlay */}
@@ -255,10 +273,42 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
           {/* Card Footer Actions */}
           <View style={styles.cardFooter}>
-            <TouchableOpacity style={styles.deleteBtn} onPress={() => onDeleteTask(task.id)}>
-              <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
-              <Text style={styles.deleteText}>Delete Task</Text>
-            </TouchableOpacity>
+            <View style={styles.footerLeftActions}>
+              {task.isTrashed ? (
+                <>
+                  {onRestoreTask && (
+                    <TouchableOpacity style={styles.restoreFooterBtn} onPress={() => onRestoreTask(task.id)}>
+                      <Ionicons name="refresh-outline" size={15} color={COLORS.primary} />
+                      <Text style={styles.restoreText}>Restore</Text>
+                    </TouchableOpacity>
+                  )}
+                  {onPermanentDeleteTask && (
+                    <TouchableOpacity style={styles.deleteBtn} onPress={() => onPermanentDeleteTask(task.id)}>
+                      <Ionicons name="trash-bin-outline" size={15} color={COLORS.danger} />
+                      <Text style={styles.deleteText}>Delete Permanently</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              ) : (
+                <>
+                  {onToggleArchiveTask && (
+                    <TouchableOpacity style={styles.archiveBtn} onPress={() => onToggleArchiveTask(task.id)}>
+                      <Ionicons
+                        name={task.isArchived ? 'archive' : 'archive-outline'}
+                        size={15}
+                        color={COLORS.textSecondary}
+                      />
+                      <Text style={styles.archiveText}>{task.isArchived ? 'Unarchive' : 'Archive'}</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <TouchableOpacity style={styles.deleteBtn} onPress={() => onDeleteTask(task.id)}>
+                    <Ionicons name="trash-outline" size={15} color={COLORS.danger} />
+                    <Text style={styles.deleteText}>Trash</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
 
             <TouchableOpacity style={styles.collapseBtn} onPress={() => setExpanded(false)}>
               <Text style={styles.collapseText}>Done</Text>
@@ -462,6 +512,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 12,
+  },
+  footerLeftActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  archiveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  archiveText: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontWeight: '700',
+  },
+  restoreHeaderBtn: {
+    padding: 6,
+    borderRadius: 10,
+    backgroundColor: COLORS.primaryLight,
+    marginRight: 4,
+  },
+  restoreFooterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  restoreText: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '700',
   },
   deleteBtn: {
     flexDirection: 'row',

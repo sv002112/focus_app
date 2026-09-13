@@ -23,6 +23,9 @@ export interface Task {
   completed: boolean;
   completedAt?: string;
   streakCount?: number;
+  isPinned?: boolean;
+  isArchived?: boolean;
+  isTrashed?: boolean;
   createdAt: string;
 }
 

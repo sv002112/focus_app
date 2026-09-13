@@ -40,8 +40,9 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
   onOpenProfile,
   avatarEmoji = '⚡',
 }) => {
-  // Navigation & View Mode State
-  const [activeTab, setActiveTab] = useState<'oneTime' | 'recurring'>('oneTime');
+  // Navigation, Search & View Mode State
+  const [activeTab, setActiveTab] = useState<'tasks' | 'archive' | 'trash'>('tasks');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('All');
   const [isMainFilterDropdownOpen, setIsMainFilterDropdownOpen] = useState(false);
@@ -155,7 +156,7 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
   const openCreateTaskModal = () => {
     setNewTitle('');
     setNewDesc('');
-    setIsRecurring(activeTab === 'recurring');
+    setIsRecurring(false);
     setSelectedCategory('General');
     setNewReminderDate(undefined);
     setIsAddModalOpen(true);
@@ -168,15 +169,14 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
       id: Date.now().toString(),
       title: newTitle.trim(),
       description: newDesc.trim() || undefined,
-      isRecurring: activeTab === 'recurring' || isRecurring,
-      repeatFrequency: activeTab === 'recurring' || isRecurring ? repeatFrequency : undefined,
+      isRecurring: isRecurring,
+      repeatFrequency: isRecurring ? repeatFrequency : undefined,
       dueDate: selectedDate ? new Date(selectedDate).toISOString() : new Date().toISOString(),
       reminderDate: newReminderDate,
       category: selectedCategory,
       energyLevel,
       subTasks: [],
       completed: false,
-      streakCount: activeTab === 'recurring' ? 0 : undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -205,6 +205,29 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
         completedAt: !target.completed ? new Date().toISOString() : undefined,
       });
     }
+  };
+
+  // Task Archiving & Trashing Handlers (Same as Notes)
+  const handleToggleArchiveTask = (id: string) => {
+    const target = tasks.find((t) => t.id === id);
+    if (!target) return;
+    onUpdateTask({ ...target, isArchived: !target.isArchived });
+  };
+
+  const handleSoftDeleteTask = (id: string) => {
+    const target = tasks.find((t) => t.id === id);
+    if (!target) return;
+    onUpdateTask({ ...target, isTrashed: true });
+  };
+
+  const handleRestoreTask = (id: string) => {
+    const target = tasks.find((t) => t.id === id);
+    if (!target) return;
+    onUpdateTask({ ...target, isTrashed: false, isArchived: false });
+  };
+
+  const handlePermanentDeleteTask = (id: string) => {
+    onDeleteTask(id);
   };
 
   const handleAIBreakdown = (id: string) => {
@@ -236,10 +259,11 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Filter Tasks by Tab, Category, and Date
+  // Filter Tasks by View Tab (Tasks, Archive, Trash), Category, Date, and Search Query
   const filteredTasks = tasks.filter((t) => {
-    const matchesTab = activeTab === 'recurring' ? t.isRecurring : !t.isRecurring;
-    if (!matchesTab) return false;
+    if (activeTab === 'tasks' && (t.isArchived || t.isTrashed)) return false;
+    if (activeTab === 'archive' && (!t.isArchived || t.isTrashed)) return false;
+    if (activeTab === 'trash' && !t.isTrashed) return false;
 
     if (selectedCategoryFilter !== 'All') {
       const taskCat = t.category && t.category.trim() !== '' ? t.category.toLowerCase() : 'uncategorized';
@@ -249,7 +273,16 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
 
     if (selectedDate && t.dueDate) {
       const taskDateKey = t.dueDate.split('T')[0];
-      return taskDateKey === selectedDate;
+      if (taskDateKey !== selectedDate) return false;
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchesTitle = t.title.toLowerCase().includes(q);
+      const matchesDesc = (t.description || '').toLowerCase().includes(q);
+      const matchesCategory = (t.category || '').toLowerCase().includes(q);
+      const matchesSubTasks = t.subTasks?.some((s) => s.title.toLowerCase().includes(q));
+      return matchesTitle || matchesDesc || matchesCategory || matchesSubTasks;
     }
 
     return true;
@@ -273,16 +306,25 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
               <Text style={styles.appTitle}>Focus Tasks</Text>
             </View>
           </View>
-
-          <TouchableOpacity
-            style={styles.addFabHeader}
-            onPress={openCreateTaskModal}
-          >
-            <Ionicons name="add" size={24} color="#FFF" />
-          </TouchableOpacity>
         </View>
 
-        {/* Combined Dropdown for Views & Categories (Just like Notes Screen) */}
+        {/* Search Bar (Same as Notes Screen) */}
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color={COLORS.textSecondary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search tasks, sub-steps & categories..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        {/* Combined Dropdown for Views (All Tasks, Archive, Trash) & Categories */}
         <View style={styles.filterDropdownContainer}>
           <TouchableOpacity
             style={styles.filterDropdownTriggerBtn}
@@ -291,18 +333,24 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
           >
             <View style={styles.filterDropdownTriggerLeft}>
               <Ionicons
-                name={activeTab === 'recurring' ? 'repeat-outline' : 'checkbox-outline'}
+                name={
+                  activeTab === 'archive'
+                    ? 'archive-outline'
+                    : activeTab === 'trash'
+                    ? 'trash-outline'
+                    : 'checkbox-outline'
+                }
                 size={16}
                 color={COLORS.primary}
               />
               <Text style={styles.filterDropdownTriggerText} numberOfLines={1}>
-                {activeTab === 'recurring'
-                  ? selectedCategoryFilter === 'All'
-                    ? '🔄 Habits — All Categories'
-                    : `🔄 Habits — ${selectedCategoryFilter}`
+                {activeTab === 'archive'
+                  ? 'Archive Tasks'
+                  : activeTab === 'trash'
+                  ? 'Trash Tasks'
                   : selectedCategoryFilter === 'All'
-                  ? '📌 Tasks — All Categories'
-                  : `📌 Tasks — ${selectedCategoryFilter}`}
+                  ? 'Tasks — All Categories'
+                  : `Tasks — ${selectedCategoryFilter}`}
               </Text>
             </View>
             <Ionicons
@@ -315,22 +363,22 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
           {isMainFilterDropdownOpen && (
             <View style={styles.filterDropdownMenuBox}>
               <ScrollView style={{ maxHeight: 300 }} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                {/* SECTION 1: VIEWS */}
+                {/* SECTION 1: VIEWS (All Tasks, Archive, Trash - Same as Notes) */}
                 <Text style={styles.dropdownSectionLabel}>TASK VIEWS</Text>
                 <TouchableOpacity
                   style={[
                     styles.dropdownOptionRow,
-                    activeTab === 'oneTime' && selectedCategoryFilter === 'All' && styles.activeDropdownOption,
+                    activeTab === 'tasks' && selectedCategoryFilter === 'All' && styles.activeDropdownOption,
                   ]}
                   onPress={() => {
-                    setActiveTab('oneTime');
+                    setActiveTab('tasks');
                     setSelectedCategoryFilter('All');
                     setIsMainFilterDropdownOpen(false);
                   }}
                 >
-                  <Ionicons name="pin-outline" size={16} color={COLORS.primary} />
-                  <Text style={styles.dropdownOptionText}>📌 One-Time Tasks</Text>
-                  {activeTab === 'oneTime' && selectedCategoryFilter === 'All' && (
+                  <Ionicons name="checkbox-outline" size={16} color={COLORS.primary} />
+                  <Text style={styles.dropdownOptionText}>📝 All Tasks</Text>
+                  {activeTab === 'tasks' && selectedCategoryFilter === 'All' && (
                     <Ionicons name="checkmark" size={16} color={COLORS.primary} />
                   )}
                 </TouchableOpacity>
@@ -338,17 +386,35 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
                 <TouchableOpacity
                   style={[
                     styles.dropdownOptionRow,
-                    activeTab === 'recurring' && selectedCategoryFilter === 'All' && styles.activeDropdownOption,
+                    activeTab === 'archive' && styles.activeDropdownOption,
                   ]}
                   onPress={() => {
-                    setActiveTab('recurring');
+                    setActiveTab('archive');
                     setSelectedCategoryFilter('All');
                     setIsMainFilterDropdownOpen(false);
                   }}
                 >
-                  <Ionicons name="repeat-outline" size={16} color={COLORS.primary} />
-                  <Text style={styles.dropdownOptionText}>🔄 Routines & Habits</Text>
-                  {activeTab === 'recurring' && selectedCategoryFilter === 'All' && (
+                  <Ionicons name="archive-outline" size={16} color={COLORS.primary} />
+                  <Text style={styles.dropdownOptionText}>📦 Archive</Text>
+                  {activeTab === 'archive' && (
+                    <Ionicons name="checkmark" size={16} color={COLORS.primary} />
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.dropdownOptionRow,
+                    activeTab === 'trash' && styles.activeDropdownOption,
+                  ]}
+                  onPress={() => {
+                    setActiveTab('trash');
+                    setSelectedCategoryFilter('All');
+                    setIsMainFilterDropdownOpen(false);
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
+                  <Text style={styles.dropdownOptionText}>🗑️ Trash</Text>
+                  {activeTab === 'trash' && (
                     <Ionicons name="checkmark" size={16} color={COLORS.primary} />
                   )}
                 </TouchableOpacity>
@@ -360,16 +426,17 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
                 <TouchableOpacity
                   style={[
                     styles.dropdownOptionRow,
-                    selectedCategoryFilter === 'All' && styles.activeDropdownOption,
+                    activeTab === 'tasks' && selectedCategoryFilter === 'All' && styles.activeDropdownOption,
                   ]}
                   onPress={() => {
+                    setActiveTab('tasks');
                     setSelectedCategoryFilter('All');
                     setIsMainFilterDropdownOpen(false);
                   }}
                 >
                   <Ionicons name="apps-outline" size={16} color={COLORS.textPrimary} />
                   <Text style={styles.dropdownOptionText}>All Categories</Text>
-                  {selectedCategoryFilter === 'All' && (
+                  {activeTab === 'tasks' && selectedCategoryFilter === 'All' && (
                     <Ionicons name="checkmark" size={16} color={COLORS.primary} />
                   )}
                 </TouchableOpacity>
@@ -379,10 +446,12 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
                     <TouchableOpacity
                       style={[
                         styles.dropdownCatLeftBtn,
-                        selectedCategoryFilter.toLowerCase() === cat.name.toLowerCase() &&
+                        activeTab === 'tasks' &&
+                          selectedCategoryFilter.toLowerCase() === cat.name.toLowerCase() &&
                           styles.activeDropdownOption,
                       ]}
                       onPress={() => {
+                        setActiveTab('tasks');
                         setSelectedCategoryFilter(cat.name);
                         setIsMainFilterDropdownOpen(false);
                       }}
@@ -423,7 +492,7 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
         </View>
       </View>
 
-      {/* Date Quick Selector (Today, Tomorrow, Day After, Calendar Modal) */}
+      {/* Date Quick Selector (Today, Tomorrow, Calendar Modal) */}
       <CalendarStrip selectedDate={selectedDate} onSelectDate={setSelectedDate} />
 
       {/* Task List */}
@@ -437,7 +506,10 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
             categories={categories}
             onToggleComplete={handleToggleComplete}
             onUpdateTask={onUpdateTask}
-            onDeleteTask={onDeleteTask}
+            onDeleteTask={handleSoftDeleteTask}
+            onToggleArchiveTask={handleToggleArchiveTask}
+            onRestoreTask={handleRestoreTask}
+            onPermanentDeleteTask={handlePermanentDeleteTask}
             onAIBreakdown={handleAIBreakdown}
             onStartFocusTimer={handleStartFocusTimer}
           />
@@ -446,14 +518,31 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
           <View style={styles.emptyState}>
             <Ionicons name="checkmark-done-circle-outline" size={48} color={COLORS.textSecondary} />
             <Text style={styles.emptyTitle}>
-              {activeTab === 'oneTime' ? 'No One-Time Tasks' : 'No Recurring Habits'}
+              {activeTab === 'trash'
+                ? 'Trash is Empty'
+                : activeTab === 'archive'
+                ? 'No Archived Tasks'
+                : 'No Tasks Found'}
             </Text>
             <Text style={styles.emptySub}>
-              Tap the + button above to add a new task without friction!
+              {activeTab === 'trash'
+                ? 'Deleted tasks will appear here.'
+                : activeTab === 'archive'
+                ? 'Completed/archived tasks will appear here.'
+                : 'Tap the + button below to add a new task!'}
             </Text>
           </View>
         }
       />
+
+      {/* Floating Add Task Action Button (Bottom Right - Same as Notes) */}
+      <TouchableOpacity
+        style={styles.addFabFloating}
+        onPress={openCreateTaskModal}
+        activeOpacity={0.88}
+      >
+        <Ionicons name="add" size={28} color="#FFF" />
+      </TouchableOpacity>
 
       {/* Create Task Modal */}
       <Modal visible={isAddModalOpen} transparent animationType="slide">
@@ -461,7 +550,7 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {activeTab === 'recurring' ? '🔄 New Habit / Routine' : '📌 New One-Time Task'}
+                {isRecurring ? '🔄 New Habit / Routine' : '📌 New Task'}
               </Text>
               <TouchableOpacity onPress={() => setIsAddModalOpen(false)}>
                 <Ionicons name="close" size={24} color={COLORS.textSecondary} />
@@ -576,7 +665,7 @@ export const FocusTasksScreen: React.FC<FocusTasksScreenProps> = ({
               </View>
 
               {/* Recurring Habits Frequency Selection */}
-              {activeTab === 'recurring' && (
+              {isRecurring && (
                 <View style={styles.freqRow}>
                   <Text style={styles.freqLabel}>Repeat Frequency:</Text>
                   {(['daily', 'weekly', 'monthly'] as RepeatFrequency[]).map((freq) => (
@@ -1281,5 +1370,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: COLORS.primary,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  addFabFloating: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 999,
+    ...SHADOWS.floating,
   },
 });
